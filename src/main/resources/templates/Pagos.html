@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Gestión de Pagos - My Rouse Hotel</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <style>
+            body { background-color: #f8f9fa; }
+            .navbar-custom { background-color: #2c3e50; }
+            .modal-header-custom { background-color: #1a252f; color: white; }
+            .navbar-custom .nav-link {
+                color: rgba(255,255,255,0.75);
+                font-weight: 500;
+                padding: 0.5rem 1rem;
+            }
+            .navbar-custom .nav-link:hover { color: #ffffff; }
+            .navbar-custom .nav-link.active {
+                color: #ffffff;
+                border-bottom: 2px solid #3498db;
+            }
+            .card-stat {
+                border: none;
+                border-radius: 12px;
+                box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            }
+            .card-stat .icon-box {
+                width: 52px; height: 52px;
+                border-radius: 10px;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 1.4rem;
+            }
+            .icon-green  { background: #e8f8f0; color: #27ae60; }
+            .icon-blue   { background: #eaf2fb; color: #2980b9; }
+            .icon-red    { background: #fdedec; color: #e74c3c; }
+            .badge-confirmado { background-color: #27ae60; }
+            .badge-anulado    { background-color: #7f8c8d; }
+            #panelSaldo { display: none; }
+        </style>
+    </head>
+    <body>
+
+        <nav class="navbar navbar-expand-lg navbar-dark navbar-custom mb-4">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="/"><i class="fa-solid fa-hotel me-2"></i>My Rouse Hotel</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuPrincipal">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="menuPrincipal">
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','RECEPCIONISTA')">
+                            <a class="nav-link" href="/checkin-vista"><i class="fa-solid fa-bolt me-1"></i>Check-in Rápido</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/habitaciones-vista"><i class="fa-solid fa-bed me-1"></i>Habitaciones</a>
+                        </li>
+                        <li class="nav-item dropdown" sec:authorize="hasAnyRole('ADMIN','RECEPCIONISTA')">
+                            <a class="nav-link dropdown-toggle active" href="#" id="menuGestionDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fa-solid fa-list-check me-1"></i>Gestión
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="menuGestionDropdown">
+                                <li><a class="dropdown-item" href="/clientes-vista"><i class="fa-solid fa-users me-2"></i>Clientes</a></li>
+                                <li><a class="dropdown-item" href="/reservas-vista"><i class="fa-solid fa-calendar-check me-2"></i>Reservas</a></li>
+                                <li><a class="dropdown-item" href="/tipohabitacion-vista"><i class="fa-solid fa-tags me-2"></i>Tipos de Habitación</a></li>
+                                <li><a class="dropdown-item active" href="/pagos-vista"><i class="fa-solid fa-money-check-dollar me-2"></i>Pagos</a></li>
+                                <li sec:authorize="hasRole('ADMIN')"><hr class="dropdown-divider"></li>
+                                <li sec:authorize="hasRole('ADMIN')"><a class="dropdown-item" href="/finanzas-vista"><i class="fa-solid fa-coins me-2"></i>Finanzas</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                    <div class="d-flex align-items-center gap-3 ms-3">
+                        <span class="text-light small">
+                            <i class="fa-solid fa-user-circle me-1"></i>
+                            <span sec:authentication="name">usuario</span>
+                            <span class="badge bg-secondary ms-1" sec:authentication="principal.nombreRol">ROL</span>
+                        </span>
+                        <form th:action="@{/logout}" method="post" class="mb-0">
+                            <button type="submit" class="btn btn-sm btn-outline-light"><i class="fa-solid fa-right-from-bracket me-1"></i>Salir</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container">
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0 text-dark fw-semibold"><i class="fa-solid fa-money-check-dollar me-2 text-success"></i>Gestión de Pagos</h5>
+                <button class="btn btn-primary" onclick="abrirModalNuevo()">
+                    <i class="fa-solid fa-plus me-2"></i>Registrar Pago
+                </button>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <label for="selectReserva" class="form-label small text-secondary fw-semibold text-uppercase">Consultar saldo de una reserva</label>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-8">
+                            <select id="selectReserva" class="form-select" onchange="consultarSaldo()">
+                                <option value="">-- Selecciona una reserva --</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-outline-secondary w-100" onclick="filtrarPorReservaSeleccionada()">
+                                <i class="fa-solid fa-filter me-1"></i>Ver pagos de esta reserva
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="panelSaldo" class="row g-3 mt-3">
+                        <div class="col-6 col-md-4">
+                            <div class="card card-stat p-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="icon-box icon-blue"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                                    <div>
+                                        <div class="text-muted small">Monto Total</div>
+                                        <div class="fw-bold fs-5" id="statMontoTotal">S/ 0.00</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <div class="card card-stat p-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="icon-box icon-green"><i class="fa-solid fa-sack-dollar"></i></div>
+                                    <div>
+                                        <div class="text-muted small">Total Pagado</div>
+                                        <div class="fw-bold fs-5" id="statTotalPagado">S/ 0.00</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <div class="card card-stat p-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="icon-box icon-red"><i class="fa-solid fa-circle-exclamation"></i></div>
+                                    <div>
+                                        <div class="text-muted small">Saldo Pendiente</div>
+                                        <div class="fw-bold fs-5" id="statSaldoPendiente">S/ 0.00</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-dark"><i class="fa-solid fa-table me-2"></i>Historial de Pagos</h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="quitarFiltro()">
+                        <i class="fa-solid fa-rotate-right me-1"></i>Ver todos
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped mb-0 align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Reserva</th>
+                                    <th>Cliente</th>
+                                    <th>Monto</th>
+                                    <th>Método</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                    <th>Registrado por</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaPagos">
+                                <tr><td colspan="9" class="text-center text-muted py-4">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modalPago" data-bs-backdrop="static" tabindex="-1" aria-labelledby="form-title" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+                    <div class="modal-header modal-header-custom">
+                        <h5 class="modal-title" id="form-title"><i class="fa-solid fa-money-check-dollar me-2"></i>Registrar Pago</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form id="pagoForm">
+                        <div class="modal-body p-4">
+                            <div class="row g-3">
+                                <input type="hidden" id="idPago">
+
+                                <div class="col-12">
+                                    <label for="idReserva" class="form-label font-monospace small text-secondary">RESERVA</label>
+                                    <select class="form-select" id="idReserva" required></select>
+                                </div>
+                                <div class="col-12">
+                                    <label for="idEmpleado" class="form-label font-monospace small text-secondary">EMPLEADO QUE REGISTRA</label>
+                                    <select class="form-select" id="idEmpleado" required></select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="monto" class="form-label font-monospace small text-secondary">MONTO (S/)</label>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="monto" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="metodoPago" class="form-label font-monospace small text-secondary">MÉTODO DE PAGO</label>
+                                    <select class="form-select" id="metodoPago" required>
+                                        <option value="Efectivo">Efectivo</option>
+                                        <option value="Tarjeta">Tarjeta</option>
+                                        <option value="Transferencia">Transferencia</option>
+                                        <option value="Yape">Yape</option>
+                                        <option value="Plin">Plin</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 d-none" id="campoNroOperacion">
+                                    <label for="nroOperacion" class="form-label font-monospace small text-secondary" id="labelNroOperacion">N° DE OPERACIÓN</label>
+                                    <input type="text" class="form-control" id="nroOperacion" maxlength="30" placeholder="Código que muestra la app al completar el pago">
+                                </div>
+                                <div class="col-12" id="campoEstado" style="display:none;">
+                                    <label for="estadoPago" class="form-label font-monospace small text-secondary">ESTADO</label>
+                                    <select class="form-select" id="estadoPago">
+                                        <option value="Confirmado">Confirmado</option>
+                                        <option value="Anulado">Anulado</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label for="observaciones" class="form-label font-monospace small text-secondary">OBSERVACIONES (OPCIONAL)</label>
+                                    <textarea class="form-control" id="observaciones" rows="2" maxlength="255"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light p-3">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-success px-4"><i class="fa-solid fa-floppy-disk me-2"></i>Guardar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script>
+            const API_PAGOS    = "/api/pagos";
+            const API_RESERVAS = "/api/reservas";
+            const API_CLIENTES = "/api/clientes";
+            const API_EMPLEADOS = "/api/empleados";
+
+            let bootstrapModal;
+            let esEdicion = false;
+            let pagos = [];
+            let reservas = [];
+            let clientes = [];
+            let empleados = [];
+            let filtroReserva = null;
+
+            // Métodos digitales que dejan un código de operación como comprobante.
+            const METODOS_CON_OPERACION = ["Yape", "Plin", "Transferencia"];
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                bootstrapModal = new bootstrap.Modal(document.getElementById('modalPago'));
+                document.getElementById("pagoForm").addEventListener("submit", guardarPago);
+                document.getElementById("metodoPago").addEventListener("change", actualizarCampoOperacion);
+                await cargarDatosApoyo();
+                await listarPagos();
+            });
+
+            function actualizarCampoOperacion() {
+                const metodo = document.getElementById("metodoPago").value;
+                const campo = document.getElementById("campoNroOperacion");
+                const label = document.getElementById("labelNroOperacion");
+                const input = document.getElementById("nroOperacion");
+
+                if (METODOS_CON_OPERACION.includes(metodo)) {
+                    campo.classList.remove("d-none");
+                    label.textContent = "N° DE OPERACIÓN (OBLIGATORIO)";
+                    input.placeholder = "Código que muestra " + metodo + " al completar el pago";
+                } else if (metodo === "Tarjeta") {
+                    campo.classList.remove("d-none");
+                    label.textContent = "N° DE VOUCHER / OPERACIÓN (OPCIONAL)";
+                    input.placeholder = "Código del voucher del POS";
+                } else {
+                    campo.classList.add("d-none");
+                    input.value = "";
+                }
+            }
+
+            async function fetchJSON(url, options) {
+                const r = await fetch(url, options);
+                if (!r.ok) {
+                    const err = await r.json().catch(() => ({}));
+                    throw new Error(err.message || ("HTTP " + r.status));
+                }
+                return r.status === 204 ? null : r.json();
+            }
+
+            async function cargarDatosApoyo() {
+                try {
+                    [reservas, clientes, empleados] = await Promise.all([
+                        fetchJSON(API_RESERVAS),
+                        fetchJSON(API_CLIENTES),
+                        fetchJSON(API_EMPLEADOS)
+                    ]);
+
+                    const selectReserva = document.getElementById("selectReserva");
+                    const selectReservaModal = document.getElementById("idReserva");
+                    reservas.forEach(r => {
+                        const texto = "Reserva #" + r.idReserva + " - " + clientePorId(r.idCliente);
+                        selectReserva.innerHTML += "<option value=\"" + r.idReserva + "\">" + texto + "</option>";
+                        selectReservaModal.innerHTML += "<option value=\"" + r.idReserva + "\">" + texto + "</option>";
+                    });
+
+                    const selectEmpleado = document.getElementById("idEmpleado");
+                    empleados.forEach(e => {
+                        selectEmpleado.innerHTML += "<option value=\"" + e.idEmpleado + "\">" + e.nombre + " " + e.apellido + "</option>";
+                    });
+                } catch (error) {
+                    console.error("Error al cargar datos de apoyo:", error);
+                }
+            }
+
+            function clientePorId(id) {
+                const c = clientes.find(x => x.idCliente === id);
+                return c ? (c.nombres + " " + c.apellidos) : "—";
+            }
+
+            function empleadoPorId(id) {
+                const e = empleados.find(x => x.idEmpleado === id);
+                return e ? (e.nombre + " " + e.apellido) : "—";
+            }
+
+            function reservaTexto(idReserva) {
+                const r = reservas.find(x => x.idReserva === idReserva);
+                if (!r) return "#" + idReserva;
+                return "#" + idReserva + " · " + clientePorId(r.idCliente);
+            }
+
+            function formatMonto(n) {
+                const num = Number(n) || 0;
+                return "S/ " + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            }
+
+            function formatFecha(iso) {
+                if (!iso) return "—";
+                return new Date(iso).toLocaleString("es-PE", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit"
+                });
+            }
+
+            function badgeEstado(estado) {
+                const clase = estado === "Confirmado" ? "badge-confirmado" : "badge-anulado";
+                return "<span class=\"badge " + clase + "\">" + estado + "</span>";
+            }
+
+            async function listarPagos() {
+                const tbody = document.getElementById("tablaPagos");
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Cargando...</td></tr>';
+                try {
+                    pagos = filtroReserva
+                        ? await fetchJSON(API_PAGOS + "/reserva/" + filtroReserva)
+                        : await fetchJSON(API_PAGOS);
+                    renderTabla();
+                } catch (error) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">Error al conectar con el servidor.</td></tr>';
+                }
+            }
+
+            function renderTabla() {
+                const tbody = document.getElementById("tablaPagos");
+                if (pagos.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No hay pagos registrados.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = pagos.map(p => {
+                    const reservaDeEstePago = reservas.find(r => r.idReserva === p.idReserva) || {};
+                    return "<tr>" +
+                        "<td>" + p.idPago + "</td>" +
+                        "<td>" + reservaTexto(p.idReserva) + "</td>" +
+                        "<td>" + clientePorId(reservaDeEstePago.idCliente) + "</td>" +
+                        "<td>" + formatMonto(p.monto) + "</td>" +
+                        "<td>" + p.metodoPago +
+                            (p.nroOperacion ? "<br><small class=\"text-secondary\">Op: " + p.nroOperacion + "</small>" : "") +
+                        "</td>" +
+                        "<td>" + formatFecha(p.fechaPago) + "</td>" +
+                        "<td>" + badgeEstado(p.estadoPago) + "</td>" +
+                        "<td>" + empleadoPorId(p.idEmpleado) + "</td>" +
+                        "<td class=\"text-center\">" +
+                            "<button class=\"btn btn-sm btn-warning me-1\" onclick=\"cargarPago(" + p.idPago + ")\"><i class=\"fa-solid fa-pen-to-square\"></i></button>" +
+                            "<button class=\"btn btn-sm btn-danger\" onclick=\"eliminarPago(" + p.idPago + ")\"><i class=\"fa-solid fa-trash\"></i></button>" +
+                        "</td>" +
+                    "</tr>";
+                }).join("");
+            }
+
+            async function consultarSaldo() {
+                const idReserva = document.getElementById("selectReserva").value;
+                const panel = document.getElementById("panelSaldo");
+                if (!idReserva) { panel.style.display = "none"; return; }
+
+                try {
+                    const saldo = await fetchJSON(API_PAGOS + "/reserva/" + idReserva + "/saldo");
+                    document.getElementById("statMontoTotal").textContent = formatMonto(saldo.montoTotal);
+                    document.getElementById("statTotalPagado").textContent = formatMonto(saldo.totalPagado);
+                    document.getElementById("statSaldoPendiente").textContent = formatMonto(saldo.saldoPendiente);
+                    panel.style.display = "flex";
+                } catch (error) {
+                    panel.style.display = "none";
+                    Swal.fire({ icon: 'error', title: 'No se pudo calcular el saldo', text: error.message });
+                }
+            }
+
+            function filtrarPorReservaSeleccionada() {
+                const idReserva = document.getElementById("selectReserva").value;
+                if (!idReserva) {
+                    Swal.fire({ icon: 'warning', title: 'Selecciona una reserva', confirmButtonColor: '#2c3e50' });
+                    return;
+                }
+                filtroReserva = idReserva;
+                listarPagos();
+            }
+
+            function quitarFiltro() {
+                filtroReserva = null;
+                document.getElementById("selectReserva").value = "";
+                document.getElementById("panelSaldo").style.display = "none";
+                listarPagos();
+            }
+
+            function abrirModalNuevo() {
+                document.getElementById("pagoForm").reset();
+                document.getElementById("idPago").value = "";
+                esEdicion = false;
+                document.getElementById("form-title").innerHTML = '<i class="fa-solid fa-money-check-dollar me-2"></i>Registrar Pago';
+                document.getElementById("idReserva").disabled = false;
+                document.getElementById("campoEstado").style.display = "none";
+                document.getElementById("campoNroOperacion").classList.add("d-none");
+                if (filtroReserva) {
+                    document.getElementById("idReserva").value = filtroReserva;
+                }
+                bootstrapModal.show();
+            }
+
+            async function guardarPago(event) {
+                event.preventDefault();
+
+                const idPagoActual = document.getElementById("idPago").value;
+                const metodoSeleccionado = document.getElementById("metodoPago").value;
+                const nroOperacion = document.getElementById("nroOperacion").value.trim();
+                const datosPago = {
+                    idPago: esEdicion ? parseInt(idPagoActual) : null,
+                    idReserva: parseInt(document.getElementById("idReserva").value),
+                    idEmpleado: parseInt(document.getElementById("idEmpleado").value),
+                    monto: parseFloat(document.getElementById("monto").value),
+                    metodoPago: metodoSeleccionado,
+                    estadoPago: esEdicion ? document.getElementById("estadoPago").value : "Confirmado",
+                    nroOperacion: nroOperacion || null,
+                    observaciones: document.getElementById("observaciones").value.trim() || null
+                };
+
+                if (!datosPago.idReserva || !datosPago.idEmpleado) {
+                    Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Selecciona la reserva y el empleado.', confirmButtonColor: '#2c3e50' });
+                    return;
+                }
+                if (!datosPago.monto || datosPago.monto <= 0) {
+                    Swal.fire({ icon: 'warning', title: 'Monto inválido', text: 'El monto debe ser mayor a cero.', confirmButtonColor: '#2c3e50' });
+                    return;
+                }
+                if (METODOS_CON_OPERACION.includes(metodoSeleccionado) && !nroOperacion) {
+                    Swal.fire({ icon: 'warning', title: 'Falta el N° de operación', text: 'Los pagos por ' + metodoSeleccionado + ' requieren el código de operación como comprobante.', confirmButtonColor: '#2c3e50' });
+                    return;
+                }
+
+                try {
+                    const url = esEdicion ? (API_PAGOS + "/" + idPagoActual) : API_PAGOS;
+                    const metodo = esEdicion ? "PUT" : "POST";
+
+                    await fetchJSON(url, {
+                        method: metodo,
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(datosPago)
+                    });
+
+                    bootstrapModal.hide();
+                    Swal.fire({ icon: 'success', title: esEdicion ? '¡Actualizado!' : '¡Registrado!', timer: 1800, showConfirmButton: false });
+                    await listarPagos();
+                    if (document.getElementById("selectReserva").value) consultarSaldo();
+                } catch (error) {
+                    Swal.fire({ icon: 'error', title: 'Error', text: error.message || 'No se pudo procesar el pago.' });
+                }
+            }
+
+            function cargarPago(id) {
+                const p = pagos.find(x => x.idPago === id);
+                if (!p) return;
+
+                document.getElementById("idPago").value = p.idPago;
+                esEdicion = true;
+
+                document.getElementById("idReserva").value = p.idReserva;
+                document.getElementById("idReserva").disabled = true;
+                document.getElementById("idEmpleado").value = p.idEmpleado;
+                document.getElementById("monto").value = p.monto;
+                document.getElementById("metodoPago").value = p.metodoPago;
+                document.getElementById("estadoPago").value = p.estadoPago;
+                document.getElementById("nroOperacion").value = p.nroOperacion || "";
+                document.getElementById("observaciones").value = p.observaciones || "";
+                actualizarCampoOperacion();
+
+                document.getElementById("campoEstado").style.display = "block";
+                document.getElementById("form-title").innerHTML = '<i class="fa-solid fa-pen-to-square me-2"></i>Editar Pago';
+                bootstrapModal.show();
+            }
+
+            async function eliminarPago(id) {
+                Swal.fire({
+                    title: '¿Eliminar este pago?',
+                    text: "Esta acción no se puede deshacer.",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e74c3c',
+                    cancelButtonColor: '#7f8c8d',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then(async (result) => {
+                    if (result.isConfirmed) {
+                        try {
+                            await fetchJSON(API_PAGOS + "/" + id, { method: "DELETE" });
+                            Swal.fire({ icon: 'success', title: 'Eliminado', timer: 1500, showConfirmButton: false });
+                            await listarPagos();
+                        } catch (error) {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo eliminar el pago.' });
+                        }
+                    }
+                });
+            }
+        </script>
+    </body>
+</html>
