@@ -1,0 +1,160 @@
+-- 1. CREACIÓN DE LA BASE DE DATOS
+CREATE DATABASE BdHotelOasis2;
+GO
+USE BdHotelOasis2;
+GO
+
+-- ==========================================
+-- 2. TABLAS MAESTRAS (CON IDs AUTO-INCREMENTALES)
+-- ==========================================
+
+-- Tabla: clientes (Huéspedes)
+CREATE TABLE dbo.clientes (
+    idcliente INT IDENTITY(1,1) NOT NULL,
+    dni_ruc VARCHAR(15) NOT NULL,
+    nombres VARCHAR(100) NOT NULL,
+    apellidos VARCHAR(100) NOT NULL,
+    telefono VARCHAR(15) NULL,
+    email VARCHAR(100) NULL,
+    estado VARCHAR(20) NOT NULL CONSTRAINT DF_clientes_estado DEFAULT 'Activo',
+    
+    CONSTRAINT PK_clientes PRIMARY KEY CLUSTERED (idcliente),
+    CONSTRAINT UQ_clientes_dni UNIQUE (dni_ruc)
+);
+GO
+
+-- Tabla: Empleados
+CREATE TABLE dbo.Empleados (
+    idEmpleado INT IDENTITY(1,1) NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    rol VARCHAR(50) NOT NULL, 
+    dni VARCHAR(15) NOT NULL,
+    telefono VARCHAR(15) NULL,
+    
+    CONSTRAINT PK_Empleados PRIMARY KEY CLUSTERED (idEmpleado),
+    CONSTRAINT UQ_Empleados_dni UNIQUE (dni)
+);
+GO
+
+-- Tabla: TipoHabitacion
+CREATE TABLE dbo.TipoHabitacion (
+    idTipo INT IDENTITY(1,1) NOT NULL,
+    nombreTipo VARCHAR(50) NOT NULL, 
+    precioPorNoche DECIMAL(10,2) NOT NULL,
+    capacidadPersonas INT NOT NULL,
+    
+    CONSTRAINT PK_TipoHabitacion PRIMARY KEY CLUSTERED (idTipo)
+);
+GO
+
+-- ==========================================
+-- 3. TABLAS DEPENDIENTES (CON IDs AUTO-INCREMENTALES Y FKs)
+-- ==========================================
+
+-- Tabla: Usuarios (Seguridad)
+CREATE TABLE dbo.Usuarios (
+    idUsuario INT IDENTITY(1,1) NOT NULL,
+    idEmpleado INT NOT NULL,
+    username VARCHAR(50) NOT NULL,
+    password VARCHAR(255) NOT NULL, 
+    rolSistema VARCHAR(30) NOT NULL,
+    activo BIT NOT NULL CONSTRAINT DF_Usuarios_activo DEFAULT 1,
+    
+    CONSTRAINT PK_Usuarios PRIMARY KEY CLUSTERED (idUsuario),
+    CONSTRAINT UQ_Usuarios_username UNIQUE (username),
+    CONSTRAINT FK_Usuarios_Empleados FOREIGN KEY (idEmpleado) 
+        REFERENCES dbo.Empleados (idEmpleado) ON DELETE CASCADE
+);
+GO
+
+-- Tabla: Habitaciones
+CREATE TABLE dbo.Habitaciones (
+    idHabitacion INT IDENTITY(1,1) NOT NULL,
+    numeroHabitacion VARCHAR(10) NOT NULL,
+    piso INT NOT NULL,
+    idTipo INT NOT NULL,
+    estadoDisponibilidad VARCHAR(30) NOT NULL CONSTRAINT DF_Habitaciones_disp DEFAULT 'Disponible', 
+    estadoLimpieza VARCHAR(30) NOT NULL CONSTRAINT DF_Habitaciones_limp DEFAULT 'Limpio', 
+    fecharegistro DATE NOT NULL CONSTRAINT DF_Habitaciones_fecha DEFAULT CAST(GETDATE() AS DATE),
+    activo BIT NOT NULL CONSTRAINT DF_Habitaciones_activo DEFAULT 1,
+    
+    CONSTRAINT PK_Habitaciones PRIMARY KEY CLUSTERED (idHabitacion),
+    CONSTRAINT UQ_Habitaciones_numero UNIQUE (numeroHabitacion),
+    CONSTRAINT FK_Habitaciones_TipoHabitacion FOREIGN KEY (idTipo) 
+        REFERENCES dbo.TipoHabitacion (idTipo) ON DELETE NO ACTION
+);
+GO
+
+-- Tabla: Reservas
+CREATE TABLE dbo.Reservas (
+    idReserva INT IDENTITY(1,1) NOT NULL,
+    id_cliente INT NOT NULL,
+    idHabitacion INT NOT NULL,
+    idEmpleado INT NOT NULL,
+    fechaCheckIn DATETIME NOT NULL,
+    fechaCheckOutEsperada DATETIME NOT NULL,
+    fechaCheckOutReal DATETIME NULL,
+    estadoReserva VARCHAR(30) NOT NULL CONSTRAINT DF_Reservas_estado DEFAULT 'Pendiente', 
+    
+    CONSTRAINT PK_Reservas PRIMARY KEY CLUSTERED (idReserva),
+    CONSTRAINT FK_Reservas_Clientes FOREIGN KEY (id_cliente) 
+        REFERENCES dbo.clientes (idcliente) ON DELETE NO ACTION,
+    CONSTRAINT FK_Reservas_Habitaciones FOREIGN KEY (idHabitacion) 
+        REFERENCES dbo.Habitaciones (idHabitacion) ON DELETE NO ACTION,
+    CONSTRAINT FK_Reservas_Empleados FOREIGN KEY (idEmpleado) 
+        REFERENCES dbo.Empleados (idEmpleado) ON DELETE NO ACTION
+);
+GO
+
+-- Tabla: HistorialLimpieza
+CREATE TABLE dbo.HistorialLimpieza (
+    idLimpieza INT IDENTITY(1,1) NOT NULL,
+    idHabitacion INT NOT NULL,
+    idEmpleado INT NOT NULL, 
+    estadoLimpieza VARCHAR(30) NOT NULL, 
+    fechaHoraInicio DATETIME NOT NULL CONSTRAINT DF_Limpieza_Inicio DEFAULT GETDATE(),
+    fechaHoraFin DATETIME NULL,
+    observaciones VARCHAR(255) NULL,
+    
+    CONSTRAINT PK_HistorialLimpieza PRIMARY KEY CLUSTERED (idLimpieza),
+    CONSTRAINT FK_HistorialLimpieza_Habitaciones FOREIGN KEY (idHabitacion) 
+        REFERENCES dbo.Habitaciones (idHabitacion) ON DELETE CASCADE,
+    CONSTRAINT FK_HistorialLimpieza_Empleados FOREIGN KEY (idEmpleado) 
+        REFERENCES dbo.Empleados (idEmpleado) ON DELETE NO ACTION
+);
+GO
+
+-- ==========================================
+-- 4. NUEVAS TABLAS DE CONTROL (CON IDs AUTO-INCREMENTALES)
+-- ==========================================
+
+-- Tabla: AsistenciaPersonal (Control de Horas de Entrada y Salida de Empleados)
+CREATE TABLE dbo.AsistenciaPersonal (
+    idAsistencia INT IDENTITY(1,1) NOT NULL,
+    idEmpleado INT NOT NULL,
+    fecha DATE NOT NULL CONSTRAINT DF_Asistencia_Fecha DEFAULT CAST(GETDATE() AS DATE),
+    horaEntrada DATETIME NOT NULL CONSTRAINT DF_Asistencia_Entrada DEFAULT GETDATE(),
+    horaSalida DATETIME NULL, 
+    observaciones VARCHAR(255) NULL,
+    
+    CONSTRAINT PK_AsistenciaPersonal PRIMARY KEY CLUSTERED (idAsistencia),
+    CONSTRAINT FK_Asistencia_Empleados FOREIGN KEY (idEmpleado) 
+        REFERENCES dbo.Empleados (idEmpleado) ON DELETE CASCADE
+);
+GO
+
+-- Tabla: AccesosClientes (Control de Horas de Entrada y Salida de Huéspedes)
+CREATE TABLE dbo.AccesosClientes (
+    idAcceso INT IDENTITY(1,1) NOT NULL,
+    idcliente INT NOT NULL,
+    fechaRegistro DATE NOT NULL CONSTRAINT DF_Accesos_Fecha DEFAULT CAST(GETDATE() AS DATE),
+    horaEntrada DATETIME NOT NULL CONSTRAINT DF_Accesos_Entrada DEFAULT GETDATE(),
+    horaSalida DATETIME NULL, 
+    motivoVisita VARCHAR(150) NULL CONSTRAINT DF_Accesos_Motivo DEFAULT 'Huésped',
+    
+    CONSTRAINT PK_AccesosClientes PRIMARY KEY CLUSTERED (idAcceso),
+    CONSTRAINT FK_Accesos_Clientes FOREIGN KEY (idcliente) 
+        REFERENCES dbo.clientes (idcliente) ON DELETE CASCADE
+);
+GO
